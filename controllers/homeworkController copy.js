@@ -5,14 +5,20 @@ const Homework = require('../models/Homework');
 // @access  Private (Admin/Teacher)
 exports.createHomework = async (req, res) => {
   const { classId, subjectId, title, description, date } = req.body;
+
   try {
+    // If Teacher, check if they are authorized for this class and subject
     if (req.user.role === 'TEACHER') {
       const isClassAssigned = req.user.assignedClasses.includes(classId);
       const isSubjectAssigned = req.user.assignedSubjects.some(id => id.toString() === subjectId);
+      
       if (!isClassAssigned || !isSubjectAssigned) {
-        return res.status(403).json({ message: 'You are not assigned to this class or subject.' });
+        return res.status(403).json({ 
+          message: 'You are not assigned to this class or subject.' 
+        });
       }
     }
+
     const homework = await Homework.create({
       classId,
       subjectId,
@@ -22,6 +28,7 @@ exports.createHomework = async (req, res) => {
       description,
       date: new Date(date),
     });
+
     res.status(201).json(homework);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -56,7 +63,6 @@ exports.getHomeworkByClass = async (req, res) => {
       .lean();
 
     res.json(homework);
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -64,9 +70,7 @@ exports.getHomeworkByClass = async (req, res) => {
 
 exports.updateHomework = async (req, res) => {
   try {
-    const updatedHomework = await Homework.findByIdAndUpdate(
-      req.params.id, req.body, { returnDocument: 'after' }
-    );
+    const updatedHomework = await Homework.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after' });
     res.json(updatedHomework);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -91,19 +95,25 @@ exports.getHomeworkStats = async (req, res) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const [totalHomework, recentHomework, bySubject] = await Promise.all([
-      Homework.countDocuments({ schoolName }),
-      Homework.countDocuments({ schoolName, createdAt: { $gte: sevenDaysAgo } }),
-      Homework.aggregate([
-        { $match: { schoolName } },
-        { $group: { _id: '$subjectId', count: { $sum: 1 } } },
-        { $lookup: { from: 'subjects', localField: '_id', foreignField: '_id', as: 'subject' } },
-        { $unwind: '$subject' },
-        { $project: { name: '$subject.name', count: 1, _id: 0 } },
-      ]),
+    const totalHomework = await Homework.countDocuments({ schoolName });
+    const recentHomework = await Homework.countDocuments({ 
+      schoolName, 
+      createdAt: { $gte: sevenDaysAgo } 
+    });
+
+    const bySubject = await Homework.aggregate([
+      { $match: { schoolName } },
+      { $group: { _id: '$subjectId', count: { $sum: 1 } } },
+      { $lookup: { from: 'subjects', localField: '_id', foreignField: '_id', as: 'subject' } },
+      { $unwind: '$subject' },
+      { $project: { name: '$subject.name', count: 1, _id: 0 } }
     ]);
 
-    res.json({ total: totalHomework, recent: recentHomework, bySubject });
+    res.json({
+      total: totalHomework,
+      recent: recentHomework,
+      bySubject
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
