@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 
 // @desc    Auth user & get token
 // @route   POST /api/users/login
-// @access  Public
+// @access  Public  
 exports.loginUser = async (req, res) => {
   const { username, password } = req.body;
 
