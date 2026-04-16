@@ -97,25 +97,26 @@ exports.getAllUsers = async (req, res) => {
     const PAGE_SIZE = parseInt(limit) || 20;
     const pageNum   = parseInt(page)  || 1;
     const skip      = (pageNum - 1) * PAGE_SIZE;
-
+ 
     // Build filter — always scoped to admin's school
     const filter = { schoolName: req.user.schoolName };
     if (role)    filter.role    = role;
     if (classId) filter.classId = classId;
-
+ 
     // Parallel fetch — page data + total count
     const [users, total] = await Promise.all([
       User.find(filter)
         .populate('assignedSubjects', 'name')
+        .populate('assignedClasses', 'name section')
         .populate('classId', 'name section')
         .select('-password')
-        .sort({ name: 1 })   // alphabetical — stable order
+        .sort({ name: 1 })
         .skip(skip)
         .limit(PAGE_SIZE)
         .lean(),
       User.countDocuments(filter),
     ]);
-
+ 
     res.json({
       users,
       total,
