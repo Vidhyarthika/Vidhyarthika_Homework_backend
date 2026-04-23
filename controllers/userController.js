@@ -49,19 +49,28 @@ exports.bulkInitUsers = async (req, res) => {
     return res.status(400).json({ message: 'Expected an array of users' });
   }
   try {
-    const createdUsers = [];
-    for (const userData of users) {
-      const userExists = await User.findOne({ username: userData.username });
-      if (!userExists) {
-        const user = new User(userData);
-        await user.save();
-        createdUsers.push(user.username);
-      }
+    // Find all existing usernames in one query
+    const existingUsernames = await User.find(
+      { username: { $in: users.map(u => u.username) } },
+      { username: 1 }
+    ).lean().then(docs => docs.map(d => d.username));
+ 
+    const newUsers = users.filter(u => !existingUsernames.includes(u.username));
+ 
+    if (newUsers.length === 0) {
+      return res.status(200).json({ message: 'All users already exist', processed: 0, users: [] });
     }
+ 
+    // insertMany with individual documents so pre-save bcrypt hooks still run
+    // (insertMany with { ordered: false } skips hooks — use Promise.all + save instead)
+    const saved = await Promise.all(
+      newUsers.map(userData => new User(userData).save())
+    );
+ 
     res.status(201).json({
       message: 'Bulk initialization complete',
-      processed: createdUsers.length,
-      users: createdUsers,
+      processed: saved.length,
+      users: saved.map(u => u.username),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

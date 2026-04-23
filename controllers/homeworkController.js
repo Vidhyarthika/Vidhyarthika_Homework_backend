@@ -34,29 +34,31 @@ exports.createHomework = async (req, res) => {
 exports.getHomeworkByClass = async (req, res) => {
   const { classId } = req.params;
   const { startDate, endDate, subjectId } = req.query;
-
+ 
   try {
     let query = { classId };
-
+ 
     if (startDate && endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999); // end of day — catch all homework on that date
+ 
       query.date = {
         $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $lte: end,
       };
     }
-
+ 
     if (subjectId) {
       query.subjectId = subjectId;
     }
-
+ 
     const homework = await Homework.find(query)
       .populate('subjectId', 'name')
       .populate('teacherId', 'name')
       .sort({ date: -1 })
-      .lean();
-
+      .lean(); // already had lean() — good
+ 
     res.json(homework);
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
